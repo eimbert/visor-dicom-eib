@@ -1,0 +1,212 @@
+<main class="viewer-shell"
+      [style.grid-template-columns]="layoutColumns"
+      [class.dragging]="isDragging"
+      [class.resizing-panel]="resizingTagPanel"
+      (drop)="onDrop($event)"
+      (dragover)="onDragOver($event)"
+      (dragleave)="onDragLeave()">
+  <aside class="study-panel">
+    <div class="brand-block">
+      <div>
+        <div class="brand-line">
+          <button type="button" class="about-button" (click)="openAboutDialog()" title="Acerca de EIB" aria-label="Acerca de EIB">i</button>
+          <span class="eyebrow">EIB</span>
+        </div>
+        <h1>Visor DICOM</h1>
+      </div>
+      <span class="status-dot" [class.ready]="instances.length"></span>
+    </div>
+
+    <label class="upload-zone" for="dicomFiles">
+      <input id="dicomFiles" type="file" multiple accept=".dcm,application/dicom" (change)="onFilesSelected($event)">
+      <strong>Seleccionar DICOM</strong>
+      <span>o arrastrar estudios aqui</span>
+    </label>
+
+    <section class="patient-summary" *ngIf="selected">
+      <span class="section-label">Paciente</span>
+      <h2>{{ selected.patientName || 'Paciente sin nombre' }}</h2>
+      <dl>
+        <div>
+          <dt>NHC</dt>
+          <dd>{{ selected.patientId || '-' }}</dd>
+        </div>
+        <div>
+          <dt>Modalidad</dt>
+          <dd>{{ selected.modality || '-' }}</dd>
+        </div>
+        <div>
+          <dt>Fecha</dt>
+          <dd>{{ selected.studyDate || '-' }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="series-list">
+      <div class="panel-heading">
+        <span>Instancias</span>
+        <b>{{ instances.length }}</b>
+      </div>
+      <div class="study-tree" *ngFor="let patient of patientGroups">
+        <button type="button" class="tree-row patient-node" (click)="toggleTreeNode(patient.key)">
+          <span class="tree-toggle">{{ isTreeNodeExpanded(patient.key) ? '▾' : '▸' }}</span>
+          <span class="tree-icon">P</span>
+          <span>{{ patient.label }}</span>
+        </button>
+        <div class="tree-study" *ngIf="isTreeNodeExpanded(patient.key)">
+          <div *ngFor="let study of patient.studies">
+            <button type="button" class="tree-row study-node" (click)="toggleTreeNode(study.key)">
+              <span class="tree-toggle">{{ isTreeNodeExpanded(study.key) ? '▾' : '▸' }}</span>
+              <span class="tree-icon">E</span>
+              <span>{{ study.label }}</span>
+            </button>
+            <div class="tree-series" *ngIf="isTreeNodeExpanded(study.key)">
+              <div *ngFor="let series of study.series">
+                <button type="button" class="tree-row series-node" (click)="toggleTreeNode(series.key)">
+                  <span class="tree-toggle">{{ isTreeNodeExpanded(series.key) ? '▾' : '▸' }}</span>
+                  <span class="tree-icon">S</span>
+                  <span>{{ series.label }}</span>
+                  <b>{{ series.instances.length }}</b>
+                </button>
+                <div *ngIf="isTreeNodeExpanded(series.key)">
+                  <button class="instance-row tree-instance"
+                          *ngFor="let instance of series.instances"
+                          [class.active]="selected?.id === instance.id"
+                          (click)="selectInstance(instances.indexOf(instance))">
+                    <span class="modality-chip" [class.ecg]="instance.isWaveform" [class.pdf]="instance.isPdf">{{ instance.isStructuredReport ? 'SR' : (instance.isPdf ? 'PDF' : (instance.isWaveform ? 'ECG' : (instance.modality || 'IMG'))) }}</span>
+                    <span class="instance-text">
+                      <strong>{{ instance.documentTitle || instance.seriesDescription || instance.studyDescription || instance.fileName }}</strong>
+                      <small>{{ instance.instanceNumber || instances.indexOf(instance) + 1 }} · {{ instance.fileName }}</small>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </aside>
+
+  <section class="viewport-panel">
+    <header class="viewer-toolbar">
+      <div>
+        <span class="section-label">Estudio</span>
+        <h2>{{ studyTitle }}</h2>
+      </div>
+
+      <nav class="tool-group" aria-label="Herramientas DICOM">
+        <button type="button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" title="Window/level">WL</button>
+        <button type="button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" title="Desplazar">Pan</button>
+        <button type="button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" title="Zoom">Zoom</button>
+        <button type="button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" title="Medir distancia">Medir</button>
+        <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" title="Sonda de pixel">Probe</button>
+        <button type="button" (click)="invertViewport()" title="Invertir imagen">Invertir</button>
+        <button type="button" (click)="resetViewport()" title="Restablecer zoom, posicion y window/level">Vista</button>
+        <button type="button" class="download-button" (click)="downloadAllInstances()" [disabled]="!instances.length" title="Descargar todas las instancias cargadas">Descargar</button>
+        <button type="button" class="clear-button" (click)="clearStudy()" [disabled]="!instances.length" title="Cerrar el estudio cargado y empezar con otro paciente">Nuevo estudio</button>
+      </nav>
+    </header>
+
+    <div class="viewport-frame" [class.empty]="viewerMode === 'empty'">
+      <div #dicomViewport class="dicom-viewport" [class.hidden]="viewerMode !== 'image'"></div>
+      <canvas #ecgCanvas class="ecg-viewport" [class.hidden]="viewerMode !== 'waveform'"></canvas>
+      <iframe class="pdf-viewport" *ngIf="viewerMode === 'pdf' && safePdfUrl" [src]="safePdfUrl" title="Documento DICOM"></iframe>
+      <div class="sr-viewport" *ngIf="viewerMode === 'sr'">
+        <h2>{{ selected?.seriesDescription || selected?.studyDescription || 'Structured Report' }}</h2>
+        <div class="sr-line" *ngFor="let line of structuredReportLines" [style.padding-left.rem]="line.level * 1.1">
+          <strong>{{ line.label }}</strong>
+          <span *ngIf="line.value">{{ line.value }}</span>
+        </div>
+      </div>
+
+      <div class="loading-overlay" *ngIf="loading" aria-live="polite">
+        <span class="loading-spinner"></span>
+        <strong>Cargando estudio</strong>
+        <small>{{ statusMessage }}</small>
+      </div>
+
+      <div class="empty-state" *ngIf="viewerMode === 'empty' && !loading">
+        <strong>Sin estudio cargado</strong>
+        <span>Arrastra DICOM de imagen o ECG para comenzar.</span>
+      </div>
+
+      <div class="render-error" *ngIf="renderError">
+        <strong>Imagen no renderizada</strong>
+        <span>{{ renderError }}</span>
+      </div>
+
+      <div class="image-overlay top-left" *ngIf="selected">
+        <strong>{{ selected.patientName || 'Paciente' }}</strong>
+        <span>{{ selected.patientId || '-' }}</span>
+        <span>{{ selected.studyDescription || selected.seriesDescription || '-' }}</span>
+      </div>
+      <div class="image-overlay top-right" *ngIf="selected">
+        <strong>{{ selected.modality || '-' }}</strong>
+        <span>{{ selected.studyDate || '-' }}</span>
+        <span>{{ selected.isStructuredReport ? 'Structured Report' : (selected.isPdf ? (selected.mimeType || 'application/pdf') : (selected.isWaveform ? ecgInfo : ('WL ' + windowCenter + ' / WW ' + windowWidth))) }}</span>
+      </div>
+      <div class="image-overlay bottom-left" *ngIf="selected">
+        <span>{{ selected.isStructuredReport ? 'DICOM SR' : (selected.isPdf ? 'Encapsulated PDF' : (selected.isWaveform ? 'WaveformSequence' : 'Cornerstone WADO')) }}</span>
+        <span>{{ imageCounter }}</span>
+      </div>
+      <div class="image-overlay bottom-right" *ngIf="viewerMode === 'image'">
+        <span>Zoom {{ zoom }}%</span>
+      </div>
+    </div>
+
+    <footer class="viewer-status">
+      <div class="sequence-controls">
+        <button type="button" (click)="previousInstance()" [disabled]="selectedIndex <= 0">Anterior</button>
+        <button type="button" class="play-button" [class.playing]="isPlaying" (click)="togglePlayback()" [disabled]="instances.length < 2" title="Reproducir la secuencia en bucle">{{ isPlaying ? 'Pausa' : 'Play' }}</button>
+        <button type="button" (click)="nextInstance()" [disabled]="selectedIndex >= instances.length - 1">Siguiente</button>
+      </div>
+      <span>{{ statusMessage }}</span>
+    </footer>
+  </section>
+
+  <div class="panel-resizer tag-resizer"
+       role="separator"
+       aria-orientation="vertical"
+       title="Arrastrar para cambiar el ancho de los metadatos"
+       (mousedown)="startTagPanelResize($event)"
+       (touchstart)="startTagPanelResize($event)"></div>
+
+  <aside class="tag-panel">
+    <div class="panel-heading">
+      <span>DICOM Tags</span>
+      <b>{{ filteredTags.length }}</b>
+    </div>
+
+    <input class="tag-search"
+           type="search"
+           placeholder="Buscar tag, valor o descripcion"
+           [(ngModel)]="tagFilter"
+           (input)="filterTags()">
+
+    <div class="tag-table">
+      <div class="tag-row header">
+        <span>Tag</span>
+        <span>VR</span>
+        <span>Descripcion</span>
+        <span>Valor</span>
+      </div>
+      <div class="tag-row" *ngFor="let row of filteredTags">
+        <span>{{ row.tag }}</span>
+        <span>{{ row.vr }}</span>
+        <span>{{ row.name }}</span>
+        <span>{{ row.value }}</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="about-backdrop" *ngIf="showAboutDialog" (click)="closeAboutDialog()">
+    <section class="about-dialog" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" (click)="$event.stopPropagation()">
+      <span class="section-label">Acerca de</span>
+      <h2 id="aboutTitle">EIB</h2>
+      <p>Enrique Imbert-Bouchard</p>
+      <p>(c) 2026</p>
+      <button type="button" (click)="closeAboutDialog()">Cerrar</button>
+    </section>
+  </div>
+</main>
