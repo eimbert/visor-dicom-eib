@@ -104,6 +104,7 @@
         <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" title="Sonda de pixel">Probe</button>
         <button type="button" (click)="invertViewport()" title="Invertir imagen">Invertir</button>
         <button type="button" (click)="resetViewport()" title="Restablecer zoom, posicion y window/level">Vista</button>
+        <button type="button" class="ai-opinion-button" (click)="openAiDialog()" [disabled]="!canRequestAiOpinion" title="Solicitar una observación preliminar de la instancia seleccionada"><span aria-hidden="true">✦</span> Opinión IA</button>
         <button type="button" class="download-button" (click)="downloadAllInstances()" [disabled]="!instances.length" title="Descargar todas las instancias cargadas">Descargar</button>
         <button type="button" class="clear-button" (click)="clearStudy()" [disabled]="!instances.length" title="Cerrar el estudio cargado y empezar con otro paciente">Nuevo estudio</button>
       </nav>
@@ -207,6 +208,31 @@
       <p>Enrique Imbert-Bouchard</p>
       <p>(c) 2026</p>
       <button type="button" (click)="closeAboutDialog()">Cerrar</button>
+    </section>
+  </div>
+
+  <div class="ai-backdrop" *ngIf="showAiDialog" (click)="closeAiDialog()">
+    <section class="ai-dialog" role="dialog" aria-modal="true" aria-labelledby="aiTitle" (click)="$event.stopPropagation()">
+      <div class="ai-dialog-heading">
+        <div><span class="section-label">Asistente experimental</span><h2 id="aiTitle">Opinión IA</h2></div>
+        <button type="button" class="dialog-close" (click)="closeAiDialog()" [disabled]="aiLoading" aria-label="Cerrar">×</button>
+      </div>
+      <p class="ai-warning">Contenido generado automáticamente. No tiene valor diagnóstico hasta revisión y validación por facultativo.</p>
+      <p class="ai-instance"><strong>Entrada:</strong> {{ viewerMode === 'waveform' ? 'electrocardiograma seleccionado' : 'imagen seleccionada' }}. No se enviarán los tags ni los overlays con datos del paciente.</p>
+      <label class="ai-privacy-check"><input type="checkbox" [(ngModel)]="aiPrivacyConfirmed" [disabled]="aiLoading"> <span>He comprobado visualmente que no aparecen nombres, identificadores, fechas u otros datos del paciente grabados dentro de la imagen.</span></label>
+      <label for="aiQuestion">Pregunta clínica</label>
+      <small class="ai-question-help">No incluyas nombres, identificadores, fechas ni otros datos del paciente.</small>
+      <textarea id="aiQuestion" rows="4" maxlength="1200" [(ngModel)]="aiQuestion" [disabled]="aiLoading"></textarea>
+      <div class="ai-progress" *ngIf="aiLoading"><span class="loading-spinner"></span><span>Analizando una única imagen…</span></div>
+      <div class="ai-error" *ngIf="aiError"><strong>No se pudo completar</strong><span>{{ aiError }}</span></div>
+      <article class="ai-result" *ngIf="aiOpinion">
+        <div><span>Modelo</span><strong>{{ aiOpinion.model }}</strong></div>
+        <pre>{{ aiOpinion.opinion }}</pre>
+      </article>
+      <div class="ai-actions">
+        <button type="button" (click)="closeAiDialog()" [disabled]="aiLoading">Cerrar</button>
+        <button type="button" class="ai-submit" (click)="requestAiOpinion()" [disabled]="aiLoading || !aiQuestion.trim() || !aiPrivacyConfirmed">{{ aiLoading ? 'Analizando…' : 'Solicitar opinión' }}</button>
+      </div>
     </section>
   </div>
 </main>
