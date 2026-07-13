@@ -1,5 +1,6 @@
-<main class="viewer-shell"
-      [style.grid-template-columns]="layoutColumns"
+<main #viewerShell
+      class="viewer-shell"
+      [style.--tag-panel-width]="tagPanelWidth + 'px'"
       [class.dragging]="isDragging"
       [class.resizing-panel]="resizingTagPanel"
       (drop)="onDrop($event)"
@@ -169,8 +170,7 @@
        role="separator"
        aria-orientation="vertical"
        title="Arrastrar para cambiar el ancho de los metadatos"
-       (mousedown)="startTagPanelResize($event)"
-       (touchstart)="startTagPanelResize($event)"></div>
+       (pointerdown)="startTagPanelResize($event)"></div>
 
   <aside class="tag-panel">
     <div class="panel-heading">

@@ -73,6 +73,7 @@ type ViewerMode = 'empty' | 'image' | 'waveform' | 'pdf' | 'sr';
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
   title = 'visor-dicom-eib';
+  @ViewChild('viewerShell', { static: true }) viewerShell!: ElementRef<HTMLElement>;
   @ViewChild('dicomViewport', { static: true }) dicomViewport!: ElementRef<HTMLDivElement>;
   @ViewChild('ecgCanvas', { static: true }) ecgCanvas!: ElementRef<HTMLCanvasElement>;
 
@@ -224,23 +225,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.isDragging = false;
   }
 
-  get layoutColumns(): string {
-    return `${this.studyPanelWidth}px minmax(420px, 1fr) 8px ${this.tagPanelWidth}px`;
-  }
-
-  startTagPanelResize(event: MouseEvent | TouchEvent): void {
+  startTagPanelResize(event: PointerEvent): void {
     event.preventDefault();
     this.resizingTagPanel = true;
-    document.addEventListener('mousemove', this.onTagPanelResize);
-    document.addEventListener('mouseup', this.stopTagPanelResize);
-    document.addEventListener('touchmove', this.onTagPanelResize, { passive: false });
-    document.addEventListener('touchend', this.stopTagPanelResize);
-    this.updateTagPanelWidth(event);
+    const target = event.currentTarget as HTMLElement | null;
+    target?.setPointerCapture?.(event.pointerId);
+    document.addEventListener('pointermove', this.onTagPanelResize);
+    document.addEventListener('pointerup', this.stopTagPanelResize);
+    document.addEventListener('pointercancel', this.stopTagPanelResize);
+    this.updateTagPanelWidth(event.clientX);
   }
 
-  private readonly onTagPanelResize = (event: MouseEvent | TouchEvent): void => {
+  private readonly onTagPanelResize = (event: PointerEvent): void => {
     event.preventDefault();
-    this.updateTagPanelWidth(event);
+    this.updateTagPanelWidth(event.clientX);
   };
 
   private readonly stopTagPanelResize = (): void => {
@@ -249,25 +247,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.resizeActiveViewport();
   };
 
-  private updateTagPanelWidth(event: MouseEvent | TouchEvent): void {
-    const clientX = event instanceof MouseEvent ? event.clientX : event.touches[0]?.clientX;
-    if (typeof clientX !== 'number') {
-      return;
-    }
-
+  private updateTagPanelWidth(clientX: number): void {
     const minTagWidth = 300;
     const minViewportWidth = 420;
     const maxTagWidth = Math.max(minTagWidth, window.innerWidth - this.studyPanelWidth - minViewportWidth - 8);
     const wantedWidth = window.innerWidth - clientX;
     this.tagPanelWidth = Math.min(Math.max(wantedWidth, minTagWidth), maxTagWidth);
+    this.viewerShell.nativeElement.style.setProperty('--tag-panel-width', `${this.tagPanelWidth}px`);
     this.resizeActiveViewport();
   }
 
   private detachResizeListeners(): void {
-    document.removeEventListener('mousemove', this.onTagPanelResize);
-    document.removeEventListener('mouseup', this.stopTagPanelResize);
-    document.removeEventListener('touchmove', this.onTagPanelResize);
-    document.removeEventListener('touchend', this.stopTagPanelResize);
+    document.removeEventListener('pointermove', this.onTagPanelResize);
+    document.removeEventListener('pointerup', this.stopTagPanelResize);
+    document.removeEventListener('pointercancel', this.stopTagPanelResize);
   }
 
   private resizeActiveViewport(): void {
