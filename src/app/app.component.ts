@@ -1,5 +1,6 @@
 ﻿import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import * as cornerstone from 'cornerstone-core';
 import * as cornerstoneMath from 'cornerstone-math';
 import * as cornerstoneTools from 'cornerstone-tools';
@@ -7,6 +8,7 @@ import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import * as dicomParser from 'dicom-parser';
 import * as Hammer from 'hammerjs';
 import * as JSZip from 'jszip';
+import { environment } from '../environments/environment';
 
 interface DicomTagRow {
   tag: string;
@@ -47,6 +49,14 @@ interface DicomInstance {
   mimeType: string;
 }
 
+interface AiOpinionResponse {
+  requestId: string;
+  model: string;
+  contentType: string;
+  opinion: string;
+  disclaimer: string;
+}
+
 interface InstanceGroup {
   key: string;
   label: string;
@@ -78,7 +88,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild('dicomViewport', { static: true }) dicomViewport!: ElementRef<HTMLDivElement>;
   @ViewChild('ecgCanvas', { static: true }) ecgCanvas!: ElementRef<HTMLCanvasElement>;
 
-  constructor(private sanitizer: DomSanitizer) {}
+  constructor(private sanitizer: DomSanitizer, private http: HttpClient) {}
 
   instances: DicomInstance[] = [];
   patientGroups: PatientGroup[] = [];
@@ -115,11 +125,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   structuredReportLines: StructuredReportLine[] = [];
   isPlaying = false;
   showAboutDialog = false;
+  showAiDialog = false;
+  aiLoading = false;
+  aiQuestion = 'Describe los hallazgos visibles, posibles explicaciones, limitaciones y grado de confianza.';
+  aiOpinion?: AiOpinionResponse;
+  aiError = '';
+  aiPrivacyConfirmed = false;
   tagPanelWidth = 430;
   readonly studyPanelWidth = 344;
   resizingTagPanel = false;
   private playbackTimer?: ReturnType<typeof setInterval>;
   private readonly playbackDelay = 350;
+  private readonly aiOpinionUrl = `${environment.aiApiBaseUrl}/ai/opinion`;
 
   readonly tagNames: Record<string, string> = {
     x00020000: 'File Meta Information Group Length',
@@ -421,6 +438,65 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
   closeAboutDialog(): void {
     this.showAboutDialog = false;
+  }
+
+  get canRequestAiOpinion(): boolean {
+    return Boolean(this.selected && (this.viewerMode === 'image' || this.viewerMode === 'waveform') && !this.renderError);
+  }
+
+  openAiDialog(): void {
+    if (!this.canRequestAiOpinion) {
+      this.statusMessage = 'Selecciona una imagen o un electro renderizado';
+      return;
+    }
+    this.aiOpinion = undefined;
+    this.aiError = '';
+    this.aiPrivacyConfirmed = false;
+    this.showAiDialog = true;
+  }
+
+  closeAiDialog(): void {
+    if (!this.aiLoading) this.showAiDialog = false;
+  }
+
+  async requestAiOpinion(): Promise<void> {
+    if (!this.selected || !this.canRequestAiOpinion || this.aiLoading || !this.aiPrivacyConfirmed) return;
+    this.aiLoading = true;
+    this.aiError = '';
+    this.aiOpinion = undefined;
+    this.statusMessage = 'Preparando imagen anonimizada para la IA...';
+
+    try {
+      const canvas = this.getClinicalCanvas();
+      const blob = await this.canvasToPng(canvas);
+      const form = new FormData();
+      form.append('image', blob, this.viewerMode === 'waveform' ? 'ecg-anonimizado.png' : 'imagen-anonimizada.png');
+      form.append('contentType', this.viewerMode === 'waveform' ? 'ECG' : 'IMAGE');
+      form.append('question', this.aiQuestion.trim());
+      form.append('burnedInAnnotation', String(this.getString(this.selected.dataSet, 'x00280301').toUpperCase() === 'YES'));
+      this.aiOpinion = await this.http.post<AiOpinionResponse>(this.aiOpinionUrl, form).toPromise();
+      this.statusMessage = 'Opinión IA recibida para revisión profesional';
+    } catch (error) {
+      const httpError = error as HttpErrorResponse;
+      this.aiError = httpError.error?.message || httpError.message || 'No se pudo obtener la opinión IA';
+      this.statusMessage = this.aiError;
+    } finally {
+      this.aiLoading = false;
+    }
+  }
+
+  private getClinicalCanvas(): HTMLCanvasElement {
+    if (this.viewerMode === 'waveform') return this.ecgCanvas.nativeElement;
+    const canvas = this.dicomViewport.nativeElement.querySelector('canvas');
+    if (!canvas) throw new Error('No se encontró la imagen renderizada');
+    return canvas;
+  }
+
+  private canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+    return new Promise((resolve, reject) => canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('No se pudo preparar la imagen PNG')),
+      'image/png'
+    ));
   }
 
   togglePlayback(): void {
