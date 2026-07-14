@@ -97,13 +97,14 @@
       </div>
 
       <nav class="tool-group" aria-label="Herramientas DICOM">
-        <button type="button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" title="Window/level">WL</button>
-        <button type="button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" title="Desplazar">Pan</button>
-        <button type="button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" title="Zoom">Zoom</button>
-        <button type="button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" title="Medir distancia">Medir</button>
-        <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" title="Sonda de pixel">Probe</button>
-        <button type="button" (click)="invertViewport()" title="Invertir imagen">Invertir</button>
-        <button type="button" (click)="resetViewport()" title="Restablecer zoom, posicion y window/level">Vista</button>
+        <button type="button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" [disabled]="viewerMode !== 'image'" title="Arrastrar horizontal/verticalmente para ajustar ventana y nivel">WL</button>
+        <button type="button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" [disabled]="viewerMode !== 'image'" title="Arrastrar con el boton izquierdo para desplazar la imagen">Pan</button>
+        <button type="button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" [disabled]="viewerMode !== 'image'" title="Arrastrar verticalmente o usar la rueda para ampliar y reducir">Zoom</button>
+        <button type="button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" [disabled]="viewerMode !== 'image'" title="Pulsar y arrastrar entre dos puntos para medir distancia">Medir</button>
+        <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" [disabled]="viewerMode !== 'image'" title="Pulsar sobre la imagen para consultar el valor del pixel">Probe</button>
+        <button type="button" (click)="invertViewport()" [disabled]="viewerMode !== 'image'" title="Invertir blanco y negro de la imagen">Invertir</button>
+        <button type="button" (click)="resetViewport()" [disabled]="viewerMode !== 'image'" title="Restablecer zoom, posicion y ventana de la imagen">Vista</button>
+        <button type="button" (click)="clearImageAnnotations()" [disabled]="viewerMode !== 'image'" title="Eliminar todas las mediciones y marcas Probe de la imagen actual">Borrar marcas</button>
         <button type="button" class="download-button" (click)="downloadAllInstances()" [disabled]="!instances.length" title="Descargar todas las instancias cargadas">Descargar</button>
         <button type="button" class="clear-button" (click)="clearStudy()" [disabled]="!instances.length" title="Cerrar el estudio cargado y empezar con otro paciente">Nuevo estudio</button>
       </nav>
@@ -111,7 +112,39 @@
 
     <div class="viewport-frame" [class.empty]="viewerMode === 'empty'">
       <div #dicomViewport class="dicom-viewport" [class.hidden]="viewerMode !== 'image'"></div>
-      <canvas #ecgCanvas class="ecg-viewport" [class.hidden]="viewerMode !== 'waveform'"></canvas>
+      <section class="ecg-viewer" [class.hidden]="viewerMode !== 'waveform'">
+        <header class="ecg-header">
+          <div class="ecg-patient-line">
+            <strong>{{ selected?.patientName || 'Paciente' }}</strong>
+            <span>{{ ecgHeader.dateTime }}</span>
+            <span>{{ ecgHeader.accession }}</span>
+          </div>
+          <dl class="ecg-measurements">
+            <div><dt>Vent. Rate</dt><dd>{{ ecgHeader.rate }} <small>BPM</small></dd></div>
+            <div><dt>PR Int.</dt><dd>{{ ecgHeader.pr }}</dd></div>
+            <div><dt>QRS Dur.</dt><dd>{{ ecgHeader.qrs }}</dd></div>
+            <div><dt>QT/QTc</dt><dd>{{ ecgHeader.qt }}</dd></div>
+            <div><dt>P/R/T Axes</dt><dd>{{ ecgHeader.axes }}</dd></div>
+            <div><dt>BP</dt><dd>{{ ecgHeader.bp }}</dd></div>
+          </dl>
+          <label class="ecg-comment">
+            <span>Comentarios</span>
+            <textarea [(ngModel)]="ecgComment" (ngModelChange)="onEcgCommentChange()" maxlength="1000"></textarea>
+          </label>
+        </header>
+
+        <div class="ecg-toolbar" aria-label="Ajustes ECG">
+          <button type="button" title="Restablecer ajustes ECG" (click)="ecgLayout='3x4+1'; ecgRhythmLead='II'; ecgLowCut=0.05; ecgHighCut=150; ecgSpeed=25; ecgGain=10; onEcgSettingChange()">↻</button>
+          <label>Formato<select [(ngModel)]="ecgLayout" (change)="onEcgSettingChange()"><option *ngFor="let layout of ecgLayouts" [value]="layout">{{ layout }}</option></select></label>
+          <label>Ritmo<select [(ngModel)]="ecgRhythmLead" (change)="onEcgSettingChange()"><option *ngFor="let lead of ecgLeads" [value]="lead">{{ lead }}</option></select></label>
+          <span class="ecg-toolbar-spacer"></span>
+          <label>Filtro bajo<select [(ngModel)]="ecgLowCut" (change)="onEcgSettingChange()"><option *ngFor="let value of ecgLowCuts" [ngValue]="value">{{ value }} Hz</option></select></label>
+          <label>Filtro alto<select [(ngModel)]="ecgHighCut" (change)="onEcgSettingChange()"><option *ngFor="let value of ecgHighCuts" [ngValue]="value">{{ value }} Hz</option></select></label>
+          <label>Velocidad<select [(ngModel)]="ecgSpeed" (change)="onEcgSettingChange()"><option *ngFor="let value of ecgSpeeds" [ngValue]="value">{{ value }} mm/s</option></select></label>
+          <label>Ganancia<select [(ngModel)]="ecgGain" (change)="onEcgSettingChange()"><option *ngFor="let value of ecgGains" [ngValue]="value">{{ value }} mm/mV</option></select></label>
+        </div>
+        <canvas #ecgCanvas class="ecg-viewport"></canvas>
+      </section>
       <iframe class="pdf-viewport" *ngIf="viewerMode === 'pdf' && safePdfUrl" [src]="safePdfUrl" title="Documento DICOM"></iframe>
       <div class="sr-viewport" *ngIf="viewerMode === 'sr'">
         <h2>{{ selected?.seriesDescription || selected?.studyDescription || 'Structured Report' }}</h2>
@@ -137,17 +170,17 @@
         <span>{{ renderError }}</span>
       </div>
 
-      <div class="image-overlay top-left" *ngIf="selected">
+      <div class="image-overlay top-left" *ngIf="selected && viewerMode !== 'waveform'">
         <strong>{{ selected.patientName || 'Paciente' }}</strong>
         <span>{{ selected.patientId || '-' }}</span>
         <span>{{ selected.studyDescription || selected.seriesDescription || '-' }}</span>
       </div>
-      <div class="image-overlay top-right" *ngIf="selected">
+      <div class="image-overlay top-right" *ngIf="selected && viewerMode !== 'waveform'">
         <strong>{{ selected.modality || '-' }}</strong>
         <span>{{ selected.studyDate || '-' }}</span>
         <span>{{ selected.isStructuredReport ? 'Structured Report' : (selected.isPdf ? (selected.mimeType || 'application/pdf') : (selected.isWaveform ? ecgInfo : ('WL ' + windowCenter + ' / WW ' + windowWidth))) }}</span>
       </div>
-      <div class="image-overlay bottom-left" *ngIf="selected">
+      <div class="image-overlay bottom-left" *ngIf="selected && viewerMode !== 'waveform'">
         <span>{{ selected.isStructuredReport ? 'DICOM SR' : (selected.isPdf ? 'Encapsulated PDF' : (selected.isWaveform ? 'WaveformSequence' : 'Cornerstone WADO')) }}</span>
         <span>{{ imageCounter }}</span>
       </div>

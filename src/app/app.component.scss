@@ -437,8 +437,114 @@ button:disabled {
   user-select: none;
 }
 
+.ecg-viewer {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  background: #fbf6f0;
+  color: #172027;
+}
+
+.ecg-header {
+  display: grid;
+  grid-template-columns: minmax(20rem, 0.8fr) minmax(22rem, 1fr);
+  grid-template-rows: auto auto;
+  gap: 0.45rem 1.5rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid #243a4d;
+  background: #f7f9fa;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.76rem;
+}
+
+.ecg-patient-line {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 1.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid #263e53;
+}
+
+.ecg-measurements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.12rem 1rem;
+  margin: 0;
+}
+
+.ecg-measurements div {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+}
+
+.ecg-measurements dt,
+.ecg-measurements dd {
+  margin: 0;
+}
+
+.ecg-comment {
+  display: grid;
+  grid-template-rows: auto minmax(3.4rem, 1fr);
+  gap: 0.2rem;
+}
+
+.ecg-comment textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #687985;
+  border-radius: 2px;
+  background: #fff;
+  color: #172027;
+  padding: 0.35rem;
+  font: inherit;
+}
+
+.ecg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.3rem;
+  padding: 0.3rem 0.45rem;
+  background: #223e58;
+  color: #fff;
+  font-size: 0.72rem;
+}
+
+.ecg-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.ecg-toolbar select {
+  min-height: 1.7rem;
+  border: 1px solid #9fb0bc;
+  border-radius: 3px;
+  background: #fff;
+  color: #111820;
+}
+
+.ecg-toolbar button {
+  min-width: 2rem;
+  min-height: 1.8rem;
+  padding: 0;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+}
+
+.ecg-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
 .ecg-viewport {
   display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   background: #fbf6f0;
 }
 

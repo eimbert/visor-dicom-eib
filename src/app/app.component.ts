@@ -1,6 +1,7 @@
 ﻿import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import * as cornerstone from 'cornerstone-core';
+import * as cornerstoneMath from 'cornerstone-math';
 import * as cornerstoneTools from 'cornerstone-tools';
 import * as cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import * as dicomParser from 'dicom-parser';
@@ -95,6 +96,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   windowCenter = 0;
   windowWidth = 0;
   ecgInfo = 'Sin waveform cargada';
+  ecgLayout = '3x4+1';
+  ecgRhythmLead = 'II';
+  ecgLowCut = 0.05;
+  ecgHighCut = 150;
+  ecgSpeed = 25;
+  ecgGain = 10;
+  ecgComment = '';
+  readonly ecgLayouts = ['3x4', '3x4+1', '3x4+3', '6x1-limb', '6x1-chest', '6x2', '6x2+1', '12x1'];
+  readonly ecgLeads = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
+  readonly ecgLowCuts = [0.05, 0.5, 1];
+  readonly ecgHighCuts = [40, 100, 150];
+  readonly ecgSpeeds = [12.5, 25, 50];
+  readonly ecgGains = [5, 10, 20];
+  private readonly ecgComments = new Map<string, string>();
   renderError = '';
   safePdfUrl?: SafeResourceUrl;
   structuredReportLines: StructuredReportLine[] = [];
@@ -105,7 +120,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   resizingTagPanel = false;
   private playbackTimer?: ReturnType<typeof setInterval>;
   private readonly playbackDelay = 350;
-  private toolsRegistered = false;
 
   readonly tagNames: Record<string, string> = {
     x00020000: 'File Meta Information Group Length',
@@ -301,7 +315,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     this.instances = parsed.sort((a, b) => this.compareInstances(a, b));
     this.patientGroups = this.buildPatientGroups(this.instances);
-    this.expandAllTreeGroups();
+    this.expandedTreeKeys.clear();
+    this.patientGroups.forEach(patient => {
+      this.expandedTreeKeys.add(patient.key);
+      patient.studies.forEach(study => this.expandedTreeKeys.add(study.key));
+    });
     this.loading = false;
 
     if (!this.instances.length) {
@@ -352,6 +370,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
 
     if (this.selected.isWaveform) {
       this.viewerMode = 'waveform';
+      this.ecgComment = this.ecgComments.get(this.selected.id) || '';
       try {
         cornerstone.disable(this.dicomViewport.nativeElement);
       } catch {
@@ -449,17 +468,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.expandedTreeKeys.has(key);
   }
 
-  private expandAllTreeGroups(): void {
-    this.expandedTreeKeys.clear();
-    this.patientGroups.forEach(patient => {
-      this.expandedTreeKeys.add(patient.key);
-      patient.studies.forEach(study => {
-        this.expandedTreeKeys.add(study.key);
-        study.series.forEach(series => this.expandedTreeKeys.add(series.key));
-      });
-    });
-  }
-
   async downloadAllInstances(): Promise<void> {
     if (!this.instances.length) {
       this.statusMessage = 'No hay instancias cargadas para descargar';
@@ -498,6 +506,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.safePdfUrl = undefined;
     this.structuredReportLines = [];
     this.ecgInfo = 'Sin waveform cargada';
+    this.ecgComment = '';
+    this.ecgComments.clear();
     this.zoom = 100;
     this.windowCenter = 0;
     this.windowWidth = 0;
@@ -534,11 +544,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     cornerstone.setViewport(this.dicomViewport.nativeElement, viewport);
   }
 
-  setActiveTool(toolName: string): void {
-    this.activeTool = toolName;
+  clearImageAnnotations(): void {
+    if (this.viewerMode !== 'image') return;
+    const element = this.dicomViewport.nativeElement;
+    ['Length', 'Probe'].forEach(toolName => cornerstoneTools.clearToolState(element, toolName));
+    cornerstone.updateImage(element);
+    this.statusMessage = 'Mediciones y marcas eliminadas de la imagen actual';
+  }
 
+  setActiveTool(toolName: string): void {
     if (this.viewerMode !== 'image') {
-      this.statusMessage = 'Las herramientas se activan sobre imagen DICOM';
+      this.statusMessage = 'Estas herramientas solo estan disponibles para imagenes DICOM';
       return;
     }
 
@@ -547,30 +563,32 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.ensureCornerstoneEnabled(element);
 
     ['Wwwc', 'Pan', 'Zoom', 'Length', 'Probe'].forEach(name => {
-      if (tools.setToolPassiveForElement) {
+      try {
         tools.setToolPassiveForElement(element, name);
+      } catch {
+        // A tool without state can already be passive.
       }
     });
 
-    if (tools.setToolActiveForElement) {
-      tools.setToolActiveForElement(element, toolName, { mouseButtonMask: 1 });
-      if (toolName !== 'Pan') {
-        tools.setToolActiveForElement(element, 'Pan', { mouseButtonMask: 2 });
-      }
+    tools.setToolActiveForElement(element, toolName, { mouseButtonMask: 1 });
+    if (toolName !== 'Pan') {
+      tools.setToolActiveForElement(element, 'Pan', { mouseButtonMask: 2 });
+    }
+    try {
+      tools.setToolActiveForElement(element, 'ZoomMouseWheel', {});
+    } catch {
+      // Mouse wheel support may not be available on every browser.
     }
 
-    if (tools.setToolEnabledForElement && tools.ZoomMouseWheelTool) {
-      tools.setToolEnabledForElement(element, 'ZoomMouseWheel');
-    }
-
-    const labels: Record<string, string> = {
-      Wwwc: 'Window/level',
-      Pan: 'Pan',
-      Zoom: 'Zoom',
-      Length: 'Medir',
-      Probe: 'Probe'
+    this.activeTool = toolName;
+    const instructions: Record<string, string> = {
+      Wwwc: 'WL activo: arrastra horizontal y verticalmente sobre la imagen',
+      Pan: 'Pan activo: arrastra la imagen con el boton izquierdo',
+      Zoom: 'Zoom activo: arrastra verticalmente o usa la rueda',
+      Length: 'Medir activo: pulsa y arrastra entre dos puntos',
+      Probe: 'Probe activo: pulsa sobre un pixel para consultar su valor'
     };
-    this.statusMessage = `Herramienta activa: ${labels[toolName] || toolName}`;
+    this.statusMessage = instructions[toolName] || ('Herramienta activa: ' + toolName);
   }
 
   filterTags(): void {
@@ -620,6 +638,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     });
 
     tools.external.cornerstone = cornerstone;
+    tools.external.cornerstoneMath = cornerstoneMath;
     tools.external.Hammer = Hammer;
     tools.init({ showSVGCursors: true });
 
@@ -627,6 +646,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       tools.WwwcTool,
       tools.PanTool,
       tools.ZoomTool,
+      tools.ZoomMouseWheelTool,
       tools.LengthTool,
       tools.ProbeTool
     ].forEach((tool: any) => {
@@ -670,10 +690,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
 
   private registerImageTools(element: HTMLElement): void {
-    if (this.toolsRegistered) {
-      return;
-    }
-
     const tools: any = cornerstoneTools;
     [
       tools.WwwcTool,
@@ -683,21 +699,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       tools.LengthTool,
       tools.ProbeTool
     ].forEach((tool: any) => {
-      if (!tool) {
-        return;
-      }
+      if (!tool) return;
       try {
-        if (tools.addToolForElement) {
-          tools.addToolForElement(element, tool);
-        } else if (tools.addTool) {
-          tools.addTool(tool);
-        }
+        tools.addToolForElement(element, tool);
       } catch {
-        // Tool may already be registered for this viewport.
+        // Re-enabling the viewport may find a tool already registered.
       }
     });
-
-    this.toolsRegistered = true;
   }
 
   private async parseDicomFile(file: File): Promise<DicomInstance> {
@@ -850,66 +858,207 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return element.length ? `${element.length} bytes` : '';
   }
 
+  onEcgSettingChange(): void {
+    if (this.viewerMode === 'waveform' && this.selected) {
+      this.renderWaveform(this.selected);
+    }
+  }
+
+  onEcgCommentChange(): void {
+    if (this.selected) {
+      this.ecgComments.set(this.selected.id, this.ecgComment);
+    }
+  }
+
+  get ecgHeader(): { dateTime: string; accession: string; rate: string; pr: string; qrs: string; qt: string; axes: string; bp: string } {
+    const dataSet = this.selected?.dataSet;
+    if (!dataSet) {
+      return { dateTime: '-', accession: '-', rate: '-', pr: '-', qrs: '-', qt: '-', axes: '-', bp: '-' };
+    }
+    const date = this.formatDicomDate(this.getString(dataSet, 'x00080023') || this.getString(dataSet, 'x00080020'));
+    const rawTime = this.getString(dataSet, 'x00080033') || this.getString(dataSet, 'x00080030');
+    const time = rawTime ? [rawTime.slice(0, 2), rawTime.slice(2, 4), rawTime.slice(4, 6)].filter(Boolean).join(':') : '';
+    const qt = this.findEcgMeasurement(dataSet, ['qt interval', 'qt duration', 'qt time period']);
+    const qtc = this.findEcgMeasurement(dataSet, ['qtc interval', 'corrected qt', 'qtc duration']);
+    const pAxis = this.findEcgMeasurement(dataSet, ['p axis', 'p-wave axis', 'p wave axis']);
+    const rAxis = this.findEcgMeasurement(dataSet, ['r axis', 'qrs axis', 'qrs mean axis']);
+    const tAxis = this.findEcgMeasurement(dataSet, ['t axis', 't-wave axis', 't wave axis']);
+    const systolic = this.findEcgMeasurement(dataSet, ['systolic blood pressure']);
+    const diastolic = this.findEcgMeasurement(dataSet, ['diastolic blood pressure']);
+    return {
+      dateTime: [date, time].filter(Boolean).join(' ') || '-',
+      accession: this.getString(dataSet, 'x00080050') || '-',
+      rate: this.getString(dataSet, 'x00181088') || this.findEcgMeasurement(dataSet, ['ventricular heart rate', 'ventricular rate', 'heart rate']) || '-',
+      pr: this.findEcgMeasurement(dataSet, ['pr interval global', 'pr interval', 'p-r interval', 'pr time period']) || '-',
+      qrs: this.findEcgMeasurement(dataSet, ['qrs duration global', 'qrs duration', 'qrs time period']) || '-',
+      qt: this.joinEcgMeasurements(qt, qtc) || this.findEcgMeasurement(dataSet, ['qt/qtc']) || '-',
+      axes: this.joinEcgMeasurements(pAxis, rAxis, tAxis) || this.findEcgMeasurement(dataSet, ['p/r/t axes']) || '-',
+      bp: this.joinEcgMeasurements(systolic, diastolic) || this.findEcgMeasurement(dataSet, ['blood pressure']) || '-'
+    };
+  }
+
   private renderWaveform(instance: DicomInstance): void {
     const canvas = this.ecgCanvas.nativeElement;
     const context = canvas.getContext('2d');
-    if (!context) {
-      return;
-    }
+    if (!context) return;
 
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(900, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(560, Math.floor(rect.height * dpr));
+    canvas.width = Math.max(760, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(420, Math.floor(rect.height * dpr));
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
     this.drawEcgGrid(context, width, height);
-
     const waveform = this.extractWaveform(instance.dataSet);
     if (!waveform.samples.length) {
-      context.fillStyle = '#d8dee9';
+      context.fillStyle = '#263039';
       context.font = '16px Segoe UI';
       context.fillText('No se pudo extraer WaveformData de este ECG.', 28, 46);
       this.ecgInfo = 'Waveform no disponible';
       return;
     }
 
-    const visibleChannels = Math.min(waveform.channels, 12);
-    const rowHeight = (height - 70) / visibleChannels;
-    const left = 52;
-    const right = width - 24;
-    const samplesToDraw = Math.min(waveform.samplesPerChannel, 5000);
-    const channelNames = waveform.channelLabels.length ? waveform.channelLabels : this.defaultEcgLabels(visibleChannels);
+    const labels = waveform.channelLabels.length ? waveform.channelLabels : this.defaultEcgLabels(waveform.channels);
+    const samplingFrequency = Number(waveform.samplingFrequency) || 500;
+    const filtered = waveform.samples.map(values => this.filterEcgSignal(values, samplingFrequency));
+    const panels = this.buildEcgPanels(labels);
+    const rows = Math.max(...panels.map(panel => panel.row)) + 1;
+    const columns = Math.max(...panels.map(panel => panel.column)) + 1;
+    const rowHeight = height / rows;
+    const columnWidth = width / columns;
+    const speedFactor = 25 / this.ecgSpeed;
+    const requestedSamples = Math.max(80, Math.floor(waveform.samplesPerChannel * speedFactor));
+    const globalPeak = Math.max(1, ...filtered.flatMap(values => values.slice(0, requestedSamples).map(value => Math.abs(value))));
 
-    context.lineWidth = 1.35;
-    context.strokeStyle = '#101418';
-    context.fillStyle = '#222831';
+    context.strokeStyle = '#14191d';
+    context.fillStyle = '#20272c';
     context.font = '12px Segoe UI';
+    context.lineWidth = 1.25;
 
-    for (let channel = 0; channel < visibleChannels; channel++) {
-      const top = 38 + channel * rowHeight;
+    panels.forEach(panel => {
+      const values = filtered[panel.channel] || [];
+      const left = panel.column * columnWidth + 34;
+      const right = (panel.column + panel.columnSpan) * columnWidth - 12;
+      const top = panel.row * rowHeight;
       const mid = top + rowHeight / 2;
-      const values = waveform.samples[channel] || [];
-      const max = Math.max(1, ...values.slice(0, samplesToDraw).map(value => Math.abs(value)));
-      const scale = (rowHeight * 0.38) / max;
+      const count = Math.min(values.length, requestedSamples);
+      const scale = (rowHeight * 0.34 / globalPeak) * (this.ecgGain / 10);
 
-      context.fillText(channelNames[channel] || `CH ${channel + 1}`, 12, mid + 4);
+      context.fillText(panel.label, panel.column * columnWidth + 8, top + 18);
       context.beginPath();
-      for (let i = 0; i < samplesToDraw; i++) {
-        const x = left + (i / Math.max(1, samplesToDraw - 1)) * (right - left);
-        const y = mid - values[i] * scale;
-        if (i === 0) {
-          context.moveTo(x, y);
-        } else {
-          context.lineTo(x, y);
-        }
+      for (let index = 0; index < count; index++) {
+        const x = left + (index / Math.max(1, count - 1)) * (right - left);
+        const y = mid - values[index] * scale;
+        index ? context.lineTo(x, y) : context.moveTo(x, y);
       }
       context.stroke();
-    }
+    });
 
     this.ecgInfo = `${waveform.channels} canales | ${waveform.samplesPerChannel} muestras | ${waveform.samplingFrequency || '?'} Hz`;
+  }
+
+  private buildEcgPanels(labels: string[]): Array<{ channel: number; label: string; row: number; column: number; columnSpan: number }> {
+    const channelFor = (lead: string, fallback: number) => {
+      const index = labels.findIndex(label => label.toUpperCase() === lead.toUpperCase());
+      return index >= 0 ? index : Math.min(fallback, labels.length - 1);
+    };
+    const panel = (channel: number, row: number, column: number, columnSpan = 1) => ({
+      channel,
+      label: labels[channel] || `CH ${channel + 1}`,
+      row,
+      column,
+      columnSpan
+    });
+    const all = labels.slice(0, 12);
+    const rhythm = channelFor(this.ecgRhythmLead, 1);
+
+    if (this.ecgLayout === '12x1') return all.map((_, index) => panel(index, index, 0));
+    if (this.ecgLayout === '6x1-limb') return all.slice(0, 6).map((_, index) => panel(index, index, 0));
+    if (this.ecgLayout === '6x1-chest') return all.slice(6, 12).map((_, index) => panel(index + 6, index, 0));
+    if (this.ecgLayout === '6x2' || this.ecgLayout === '6x2+1') {
+      const result = all.map((_, index) => panel(index, index % 6, Math.floor(index / 6)));
+      if (this.ecgLayout.endsWith('+1')) result.push(panel(rhythm, 6, 0, 2));
+      return result;
+    }
+
+    const standardOrder = ['I', 'aVR', 'V1', 'V4', 'II', 'aVL', 'V2', 'V5', 'III', 'aVF', 'V3', 'V6'];
+    const result = standardOrder.map((lead, index) => panel(channelFor(lead, index), index % 3, Math.floor(index / 3)));
+    if (this.ecgLayout === '3x4+1') result.push(panel(rhythm, 3, 0, 4));
+    if (this.ecgLayout === '3x4+3') ['II', 'V1', 'V5'].forEach((lead, index) => result.push(panel(channelFor(lead, index), 3 + index, 0, 4)));
+    return result;
+  }
+
+  private filterEcgSignal(values: number[], samplingFrequency: number): number[] {
+    let output = values.slice();
+    if (this.ecgHighCut > 0 && this.ecgHighCut < samplingFrequency / 2) {
+      const alpha = 1 - Math.exp(-2 * Math.PI * this.ecgHighCut / samplingFrequency);
+      let previous = output[0] || 0;
+      output = output.map(value => (previous += alpha * (value - previous)));
+    }
+    if (this.ecgLowCut > 0) {
+      const rc = 1 / (2 * Math.PI * this.ecgLowCut);
+      const dt = 1 / samplingFrequency;
+      const alpha = rc / (rc + dt);
+      let previousInput = output[0] || 0;
+      let previousOutput = 0;
+      output = output.map(value => {
+        previousOutput = alpha * (previousOutput + value - previousInput);
+        previousInput = value;
+        return previousOutput;
+      });
+    }
+    return output;
+  }
+
+  private joinEcgMeasurements(...values: string[]): string {
+    const populated = values.filter(Boolean);
+    if (!populated.length) return '';
+    const unit = populated.map(value => value.match(/(?:bpm|ms|mm hg|deg|°)$/i)?.[0]).find(Boolean) || '';
+    const clean = populated.map(value => value.replace(/\s*(?:bpm|ms|mm hg|deg|°)$/i, '').trim());
+    return clean.join('/') + (unit ? ' ' + unit : '');
+  }
+
+  private findEcgMeasurement(dataSet: any, names: string[]): string {
+    const wanted = names.map(name => name.toLowerCase());
+    const textValue = (current: any): string => {
+      const numeric = this.getString(current, 'x0040a30a');
+      const unit = this.getCodeMeaning(current, 'x004008ea');
+      if (numeric) return [numeric, unit].filter(Boolean).join(' ');
+      return this.getString(current, 'x0040a160') || this.getString(current, 'x00700006');
+    };
+    const extractFromText = (text: string): string => {
+      if (!text) return '';
+      const normalized = text.replace(/\r/g, '\n');
+      for (const line of normalized.split(/\n|;/)) {
+        const lower = line.toLowerCase();
+        if (!wanted.some(name => lower.includes(name))) continue;
+        const separator = line.search(/[:=]/);
+        if (separator >= 0) return line.slice(separator + 1).trim();
+        const measurement = line.match(/[-+]?\d+(?:\.\d+)?(?:\s*\/\s*[-+]?\d+(?:\.\d+)?){0,2}\s*(?:bpm|ms|mm\s*hg|deg|°)?/i);
+        if (measurement) return measurement[0].trim();
+      }
+      return '';
+    };
+    const visit = (current: any, depth: number): string => {
+      if (!current || depth > 8) return '';
+      const meaning = this.getCodeMeaning(current, 'x0040a043').toLowerCase();
+      if (meaning && wanted.some(name => meaning.includes(name))) {
+        const value = textValue(current);
+        if (value) return value;
+      }
+      const inline = extractFromText(this.getString(current, 'x00700006') || this.getString(current, 'x0040a160'));
+      if (inline) return inline;
+      for (const element of Object.values(current.elements || {}) as any[]) {
+        for (const item of element?.items || []) {
+          const found = visit(item.dataSet, depth + 1);
+          if (found) return found;
+        }
+      }
+      return '';
+    };
+    return visit(dataSet, 0);
   }
 
   private extractWaveform(dataSet: any): {
