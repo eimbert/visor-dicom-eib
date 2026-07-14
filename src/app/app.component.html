@@ -98,14 +98,14 @@
 
       <div class="toolbar-actions">
         <nav class="tool-group image-tool-group" aria-label="Controles de imagen">
-          <button type="button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" [disabled]="viewerMode !== 'image'" title="Arrastrar horizontal/verticalmente para ajustar ventana y nivel">WL</button>
-          <button type="button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" [disabled]="viewerMode !== 'image'" title="Arrastrar con el boton izquierdo para desplazar la imagen">Pan</button>
-          <button type="button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" [disabled]="viewerMode !== 'image'" title="Arrastrar verticalmente o usar la rueda para ampliar y reducir">Zoom</button>
-          <button type="button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" [disabled]="viewerMode !== 'image'" title="Pulsar y arrastrar entre dos puntos para medir distancia">Medir</button>
-          <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" [disabled]="viewerMode !== 'image'" title="Pulsar sobre la imagen para consultar el valor del pixel">Probe</button>
-          <button type="button" (click)="invertViewport()" [disabled]="viewerMode !== 'image'" title="Invertir blanco y negro de la imagen">Invertir</button>
-          <button type="button" (click)="resetViewport()" [disabled]="viewerMode !== 'image'" title="Restablecer zoom, posicion y ventana de la imagen">Vista</button>
-          <button type="button" (click)="clearImageAnnotations()" [disabled]="viewerMode !== 'image'" title="Eliminar todas las mediciones y marcas Probe de la imagen actual">Borrar marcas</button>
+          <button type="button" class="icon-button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" [disabled]="viewerMode !== 'image'" title="Ventana y nivel" data-tooltip="Ventana y nivel" aria-label="Ajustar ventana y nivel"><span class="toolbar-icon icon-contrast" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" [disabled]="viewerMode !== 'image'" title="Desplazar imagen" data-tooltip="Desplazar imagen" aria-label="Desplazar imagen"><span class="toolbar-icon icon-pan" aria-hidden="true">↕</span></button>
+          <button type="button" class="icon-button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" [disabled]="viewerMode !== 'image'" title="Zoom" data-tooltip="Ampliar o reducir" aria-label="Ampliar o reducir imagen"><span class="toolbar-icon icon-zoom" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" [disabled]="viewerMode !== 'image'" title="Medir distancia" data-tooltip="Medir distancia" aria-label="Medir distancia"><span class="toolbar-icon icon-ruler" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" [disabled]="viewerMode !== 'image'" title="Consultar valor del píxel" data-tooltip="Valor del píxel" aria-label="Consultar valor del píxel"><span class="toolbar-icon icon-probe" aria-hidden="true">＋</span></button>
+          <button type="button" class="icon-button" (click)="invertViewport()" [disabled]="viewerMode !== 'image'" title="Invertir blanco y negro" data-tooltip="Invertir imagen" aria-label="Invertir blanco y negro"><span class="toolbar-icon icon-invert" aria-hidden="true"></span></button>
+          <button type="button" class="icon-button" (click)="resetViewport()" [disabled]="viewerMode !== 'image'" title="Restablecer vista" data-tooltip="Restablecer vista" aria-label="Restablecer vista"><span class="toolbar-icon icon-reset" aria-hidden="true">↻</span></button>
+          <button type="button" class="icon-button" (click)="clearImageAnnotations()" [disabled]="viewerMode !== 'image'" title="Borrar mediciones y marcas" data-tooltip="Borrar marcas" aria-label="Borrar mediciones y marcas"><span class="toolbar-icon icon-erase" aria-hidden="true">⌫</span></button>
         </nav>
 
         <nav class="tool-group study-action-group" aria-label="Acciones del estudio">
