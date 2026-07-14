@@ -96,20 +96,24 @@
         <h2>{{ studyTitle }}</h2>
       </div>
 
-      <nav class="tool-group" aria-label="Herramientas DICOM">
-        <button type="button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" [disabled]="viewerMode !== 'image'" title="Arrastrar horizontal/verticalmente para ajustar ventana y nivel">WL</button>
-        <button type="button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" [disabled]="viewerMode !== 'image'" title="Arrastrar con el boton izquierdo para desplazar la imagen">Pan</button>
-        <button type="button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" [disabled]="viewerMode !== 'image'" title="Arrastrar verticalmente o usar la rueda para ampliar y reducir">Zoom</button>
-        <button type="button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" [disabled]="viewerMode !== 'image'" title="Pulsar y arrastrar entre dos puntos para medir distancia">Medir</button>
-        <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" [disabled]="viewerMode !== 'image'" title="Pulsar sobre la imagen para consultar el valor del pixel">Probe</button>
-        <button type="button" (click)="invertViewport()" [disabled]="viewerMode !== 'image'" title="Invertir blanco y negro de la imagen">Invertir</button>
-        <button type="button" (click)="resetViewport()" [disabled]="viewerMode !== 'image'" title="Restablecer zoom, posicion y ventana de la imagen">Vista</button>
-        <button type="button" (click)="clearImageAnnotations()" [disabled]="viewerMode !== 'image'" title="Eliminar todas las mediciones y marcas Probe de la imagen actual">Borrar marcas</button>
-        <button type="button" class="ai-opinion-button" (click)="openAiDialog()" [disabled]="!canRequestAiOpinion" title="Solicitar una observación preliminar de la instancia seleccionada"><span aria-hidden="true">✦</span> Opinión IA</button>
+      <div class="toolbar-actions">
+        <nav class="tool-group image-tool-group" aria-label="Controles de imagen">
+          <button type="button" [class.active]="activeTool === 'Wwwc'" (click)="setActiveTool('Wwwc')" [disabled]="viewerMode !== 'image'" title="Arrastrar horizontal/verticalmente para ajustar ventana y nivel">WL</button>
+          <button type="button" [class.active]="activeTool === 'Pan'" (click)="setActiveTool('Pan')" [disabled]="viewerMode !== 'image'" title="Arrastrar con el boton izquierdo para desplazar la imagen">Pan</button>
+          <button type="button" [class.active]="activeTool === 'Zoom'" (click)="setActiveTool('Zoom')" [disabled]="viewerMode !== 'image'" title="Arrastrar verticalmente o usar la rueda para ampliar y reducir">Zoom</button>
+          <button type="button" [class.active]="activeTool === 'Length'" (click)="setActiveTool('Length')" [disabled]="viewerMode !== 'image'" title="Pulsar y arrastrar entre dos puntos para medir distancia">Medir</button>
+          <button type="button" [class.active]="activeTool === 'Probe'" (click)="setActiveTool('Probe')" [disabled]="viewerMode !== 'image'" title="Pulsar sobre la imagen para consultar el valor del pixel">Probe</button>
+          <button type="button" (click)="invertViewport()" [disabled]="viewerMode !== 'image'" title="Invertir blanco y negro de la imagen">Invertir</button>
+          <button type="button" (click)="resetViewport()" [disabled]="viewerMode !== 'image'" title="Restablecer zoom, posicion y ventana de la imagen">Vista</button>
+          <button type="button" (click)="clearImageAnnotations()" [disabled]="viewerMode !== 'image'" title="Eliminar todas las mediciones y marcas Probe de la imagen actual">Borrar marcas</button>
+        </nav>
 
-        <button type="button" class="download-button" (click)="downloadAllInstances()" [disabled]="!instances.length" title="Descargar todas las instancias cargadas">Descargar</button>
-        <button type="button" class="clear-button" (click)="clearStudy()" [disabled]="!instances.length" title="Cerrar el estudio cargado y empezar con otro paciente">Nuevo estudio</button>
-      </nav>
+        <nav class="tool-group study-action-group" aria-label="Acciones del estudio">
+          <button type="button" class="ai-opinion-button" (click)="openAiDialog()" [disabled]="!canRequestAiOpinion" title="Solicitar una observación preliminar de la instancia seleccionada"><span aria-hidden="true">✦</span> Opinión IA</button>
+          <button type="button" class="download-button" (click)="downloadAllInstances()" [disabled]="!instances.length" title="Descargar todas las instancias cargadas">Descargar</button>
+          <button type="button" class="clear-button" (click)="clearStudy()" [disabled]="!instances.length" title="Cerrar el estudio cargado y empezar con otro paciente">Nuevo estudio</button>
+        </nav>
+      </div>
     </header>
 
     <div class="viewport-frame" [class.empty]="viewerMode === 'empty'">

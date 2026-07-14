@@ -376,6 +376,20 @@ dd {
   gap: 0.45rem;
 }
 
+.toolbar-actions {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.study-action-group {
+  width: 100%;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 button {
   min-height: 2.25rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -824,6 +838,15 @@ button:disabled {
   .viewer-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .tool-group {
+    justify-content: flex-start;
   }
 }
 
