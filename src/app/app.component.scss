@@ -516,7 +516,52 @@ button:disabled {
   content: '';
 }
 
-.icon-pan { font-size: 1.55rem; transform: rotate(45deg); }
+.icon-pan,
+.icon-probe,
+.icon-erase {
+  font-size: 0;
+}
+
+.icon-pan::before,
+.icon-erase::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 1.55rem;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
+.icon-pan::before {
+  content: '↔';
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.icon-probe::before,
+.icon-probe::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  background: currentColor;
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.icon-probe::before {
+  width: 1rem;
+  height: 1px;
+}
+
+.icon-probe::after {
+  width: 1px;
+  height: 1rem;
+}
+
+.icon-erase::before {
+  content: '⌫';
+  font-size: 1.45rem;
+}
+
 .icon-ruler {
   width: 1.15rem;
   height: 0.42rem;
@@ -532,8 +577,7 @@ button:disabled {
   border-bottom: 2px solid #252b32;
   content: '';
 }
-.icon-probe, .icon-new-study { font-size: 1.6rem; font-weight: 300; }
-.icon-erase { font-size: 1.45rem; }
+.icon-new-study { font-size: 1.6rem; font-weight: 300; }
 .icon-download { font-size: 1.65rem; }
 
 .download-button {
